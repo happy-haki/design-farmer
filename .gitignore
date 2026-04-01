@@ -1,0 +1,48 @@
+# Research (internal context, not for distribution)
+research/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI / Agent
+.omc/
+.claude/
+
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# Build
+dist/
+build/
+out/
+.next/
+.turbo/
+.vercel/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test
+coverage/
+
+# Lock (uncomment if needed)
+# bun.lockb
+# pnpm-lock.yaml
