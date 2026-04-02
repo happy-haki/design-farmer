@@ -956,27 +956,110 @@ The theme provider depends on whether the user chose a library (Question 5-1) or
 
 **If using a library (next-themes, mode-watcher, etc.):**
 
-```typescript
-// theme-provider.tsx — thin wrapper around the chosen library
-// Example for Next.js with next-themes:
+Generate the following files based on the detected framework:
 
-// import { ThemeProvider as NextThemesProvider } from 'next-themes'
-//
-// export function ThemeProvider({ children }: { children: React.ReactNode }) {
-//   return (
-//     <NextThemesProvider
-//       attribute="data-theme"          // matches our CSS selectors
-//       defaultTheme="system"           // respect OS preference
-//       enableSystem                    // listen for OS changes
-//       disableTransitionOnChange       // prevent FOUC during switch
-//     >
-//       {children}
-//     </NextThemesProvider>
-//   )
-// }
-//
+**Step 1 — Root layout (`app/layout.tsx` for Next.js):**
+
+next-themes modifies `<html>` attributes on the client before hydration completes.
+`suppressHydrationWarning` on `<html>` is **REQUIRED** to prevent React hydration mismatch
+warnings. This prop only applies one level deep, so it does NOT mask errors in children.
+
+```tsx
+// app/layout.tsx
+import { ThemeProvider } from '@/components/theme-provider'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head />
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+**CRITICAL: `suppressHydrationWarning` MUST be on the `<html>` tag, not on `<body>` or
+any other element. Without it, every page load will emit a React hydration mismatch
+warning in the console because next-themes sets `data-theme` (or `class`) on `<html>`
+before React hydrates.**
+
+**Step 2 — ThemeProvider wrapper (client component):**
+
+```tsx
+// components/theme-provider.tsx
+"use client"
+
+import { ThemeProvider as NextThemesProvider } from 'next-themes'
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <NextThemesProvider
+      attribute="data-theme"          // matches our CSS selectors ([data-theme="dark"])
+      defaultTheme="system"           // respect OS preference
+      enableSystem                    // listen for OS changes
+      disableTransitionOnChange       // prevent FOUC during switch
+    >
+      {children}
+    </NextThemesProvider>
+  )
+}
+
 // Re-export useTheme from the library for consumer convenience:
-// export { useTheme } from 'next-themes'
+export { useTheme } from 'next-themes'
+```
+
+**Step 3 — Safe useTheme consumption (hydration guard):**
+
+`useTheme()` returns `undefined` for `theme` on the server. Any component that renders
+UI based on the current theme MUST guard against the mounting state to avoid hydration
+mismatches:
+
+```tsx
+// Example: theme toggle component
+"use client"
+
+import { useState, useEffect } from 'react'
+import { useTheme } from 'next-themes'
+
+export function ThemeToggle() {
+  const [mounted, setMounted] = useState(false)
+  const { resolvedTheme, setTheme } = useTheme()
+
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) return null  // or return a skeleton/placeholder
+
+  return (
+    <button onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
+      {resolvedTheme === 'dark' ? '☀️' : '🌙'}
+    </button>
+  )
+}
+```
+
+**IMPORTANT: Use `resolvedTheme` (not `theme`) when you need the actual current mode.
+`theme` returns `'system'` when system preference is active, while `resolvedTheme`
+always returns the resolved value (`'light'` or `'dark'`).**
+
+**Step 4 — Tailwind CSS integration (if Tailwind detected):**
+
+If using `attribute="class"` (for Tailwind `dark:` utilities), configure:
+
+```js
+// tailwind.config.js (v3) or tailwind.config.ts
+module.exports = { darkMode: 'selector' }  // Tailwind >= 3.4.1
+// or: darkMode: 'class'                   // Tailwind < 3.4.1
+```
+
+When using `attribute="class"`, `ThemeProvider` toggles `class="dark"` on `<html>`,
+which Tailwind's `dark:` variant reads. When using `attribute="data-theme"` (default),
+configure Tailwind's dark mode selector accordingly:
+
+```js
+// tailwind.config.js (v3)
+module.exports = { darkMode: ['selector', '[data-theme="dark"]'] }
 ```
 
 **If custom implementation:**
@@ -990,6 +1073,8 @@ The theme provider depends on whether the user chose a library (Question 5-1) or
 //    BEFORE React hydrates. This prevents the dark-mode flash.
 //
 //    <!-- In document head (Next.js: app/layout.tsx, Vite: index.html) -->
+//    <!-- IMPORTANT: Add suppressHydrationWarning to <html> in Next.js App Router -->
+//    <html suppressHydrationWarning>
 //    <script>
 //      (function() {
 //        var t = localStorage.getItem('theme');
@@ -1002,6 +1087,7 @@ The theme provider depends on whether the user chose a library (Question 5-1) or
 // 4. Listen for OS preference changes via matchMedia change event
 // 5. Sync to localStorage on every change
 // 6. Apply data-theme attribute on documentElement
+// 7. Provide a mounted guard hook for SSR-safe theme-dependent rendering
 ```
 
 ### 4.7 Scoped Theming
@@ -1026,7 +1112,67 @@ Scoped theming works automatically with CSS custom property inheritance — no a
 JavaScript needed. The nearest `[data-theme]` ancestor wins. Components consume
 `var(--token-name)` and automatically get the correct value for their theme context.
 
-### 4.8 Styling Approach Decision
+### 4.8 Dark Mode Implementation Checklist & Common Failures
+
+**MANDATORY verification after implementing dark mode. Check every item before proceeding.**
+
+#### Implementation Checklist
+
+```
+[ ] <html> has suppressHydrationWarning (Next.js App Router with next-themes)
+[ ] ThemeProvider is a "use client" component
+[ ] ThemeProvider wraps children inside <body>, NOT outside <html>
+[ ] attribute prop matches CSS selectors ([data-theme] vs .dark class)
+[ ] attribute prop matches Tailwind darkMode config (if Tailwind used)
+[ ] attribute prop matches Storybook decorator type (if Storybook used)
+[ ] All theme-dependent UI components use mounted guard pattern
+[ ] resolvedTheme used (not theme) for runtime theme checks
+[ ] disableTransitionOnChange set to prevent FOUC during switch
+[ ] Both light AND dark token sets define ALL semantic tokens (no missing variables)
+[ ] CSS selectors use [data-theme="dark"] or .dark consistently (never mixed)
+[ ] No hardcoded color values in components — all via var(--token-name)
+```
+
+#### Common Dark Mode Failure Patterns
+
+| # | Failure | Root Cause | Fix |
+|---|---------|-----------|-----|
+| 1 | Hydration mismatch warning on every page load | Missing `suppressHydrationWarning` on `<html>` | Add `suppressHydrationWarning` to `<html>` in root layout |
+| 2 | White flash before dark theme appears (FOUC) | Theme library script deferred by CDN (e.g. Cloudflare Rocket Loader) | Add `scriptProps={{ 'data-cfasync': 'false' }}` to ThemeProvider |
+| 3 | Theme toggle works but UI doesn't change | Attribute mismatch: ThemeProvider uses `data-theme` but CSS targets `.dark` class | Align ThemeProvider `attribute` with CSS selectors |
+| 4 | `theme` always returns `'system'` | Using `theme` instead of `resolvedTheme` | Use `resolvedTheme` for actual light/dark value |
+| 5 | Theme-dependent icons/text render wrong on first load | Rendering theme UI without mount guard | Add `mounted` state check before rendering theme-dependent content |
+| 6 | Storybook theme toggle has no effect | Storybook decorator type doesn't match app's attribute strategy | Match `withThemeByClassName` / `withThemeByDataAttribute` to app config |
+| 7 | Some components stay light in dark mode | Component uses hardcoded colors instead of CSS variables | Replace all hardcoded colors with `var(--semantic-token)` |
+| 8 | Dark mode colors look washed out or neon | Chroma (C) not adjusted for dark backgrounds in OKLCH | Reduce chroma slightly for dark mode surfaces; increase for accents |
+| 9 | Text is unreadable in dark mode | Missing contrast re-validation for inverted lightness | Re-run APCA contrast check for all dark mode fg/bg pairs |
+| 10 | Adding new theme requires touching component files | Components reference primitive tokens (e.g. `--color-gray-900`) | Enforce semantic-token-only rule: components use `--surface-*`, `--text-*` only |
+| 11 | Tailwind `dark:` utilities don't activate | Tailwind `darkMode` config doesn't match ThemeProvider attribute | Set `darkMode: 'selector'` or `['selector', '[data-theme="dark"]']` |
+| 12 | CSS transitions flash mid-theme-switch | Transitions fire during attribute change before new tokens resolve | Set `disableTransitionOnChange` on ThemeProvider |
+
+#### Attribute Alignment Reference
+
+All three systems (ThemeProvider, CSS/Tailwind, Storybook) must agree on the same
+attribute mechanism. Use this table to verify alignment:
+
+```
+Strategy A — data-theme attribute (recommended for CSS custom properties):
+  ThemeProvider:   attribute="data-theme"
+  CSS selectors:   [data-theme="dark"] { ... }
+  Tailwind:        darkMode: ['selector', '[data-theme="dark"]']
+  Storybook:       withThemeByDataAttribute({ attributeName: 'data-theme' })
+
+Strategy B — class attribute (recommended for Tailwind-first projects):
+  ThemeProvider:   attribute="class"
+  CSS selectors:   .dark { ... }  or  :root.dark { ... }
+  Tailwind:        darkMode: 'selector'  (or 'class' for Tailwind < 3.4.1)
+  Storybook:       withThemeByClassName({ themes: { dark: 'dark' } })
+```
+
+**Pick ONE strategy and use it consistently. Mixing strategies is the #1 cause of
+dark mode failures in design systems.**
+
+### 4.9 Styling Approach Decision
 
 Based on the codebase analysis (Phase 2), recommend the appropriate styling strategy:
 
@@ -1355,38 +1501,360 @@ Via AskUserQuestion, ask:
 > **Would you like to add Storybook?** (Recommended)
 >
 > RECOMMENDATION: Choose A — Storybook serves as living documentation and catches visual
-> regressions that unit tests miss. The latest version (8.x) has significantly improved
-> performance and supports CSS custom properties natively.
+> regressions that unit tests miss.
 >
 > Options:
-> - A) Yes, full setup — Install Storybook 8.x with stories for all components, accessibility addon, dark mode support, and auto-generated docs
+> - A) Yes, full setup — Install Storybook (latest) with stories for all components, accessibility addon, dark mode support, and auto-generated docs
 > - B) Yes, minimal — Install Storybook with basic stories only
 > - C) No, skip Storybook — Rely on tests and code documentation only
 
 **STOP. Do NOT proceed until user responds.**
 
-If user chose A or B, delegate:
+If user chose A or B:
+
+**Step 1 — Look up the latest stable Storybook version before installing:**
+
+```bash
+# Check the latest stable version from npm
+npm view storybook version
+# Also check addon compatibility
+npm view @storybook/addon-a11y version
+npm view @storybook/addon-themes version
+npm view @storybook/addon-docs version
+```
+
+Use the actual latest version from npm — do NOT hardcode any specific major version.
+Storybook releases frequently (7.x → 8.x → 9.x → ...) and addons must match the
+installed Storybook major version. Always verify compatibility before installing.
+
+**Step 2 — Delegate installation:**
 
 ```
 Agent(prompt="
-Install and configure Storybook 8.x for the design system at {systemPath}:
+Install and configure Storybook for the design system at {systemPath}:
 
-1. Install: npx storybook@latest init (or bun equivalent)
-2. Configure addons:
+IMPORTANT: First run `npm view storybook version` to determine the latest stable version.
+Use that version throughout — do NOT assume any specific major version number.
+
+1. Install: npx storybook@latest init (or bun/pnpm equivalent based on detected package manager)
+   - Verify the installed version after init: npx storybook --version
+2. Configure addons (ensure versions match the installed Storybook major version):
    - @storybook/addon-a11y (accessibility checking)
    - @storybook/addon-themes (dark mode toggle)
    - @storybook/addon-docs (auto documentation)
-3. Create stories for every implemented component:
-   - Default story showing all variants
-   - Interactive story with controls for all props
-   - Accessibility story with aria attribute demonstrations
-   - Theme story showing light/dark appearance
-4. Configure .storybook/preview.ts:
-   - Load theme CSS files
-   - Set up theme decorator for dark mode toggle
-   - Configure viewport presets
+3. Configure .storybook/preview.ts:
+   - Import the design system's global CSS (tokens, reset, theme files)
+   - Set up theme decorator for dark mode toggle (see 'Storybook Dark Mode Decorator' below)
+   - Configure viewport presets (mobile: 375px, tablet: 768px, desktop: 1280px)
+   - Enable autodocs for automatic API documentation generation
+4. Create stories for every implemented component following the Polymorphic Coverage
+   Matrix defined in Step 3 below.
 ")
 ```
+
+**Step 3 — Polymorphic Coverage Story Generation:**
+
+Every component MUST have stories covering the following 11 dimensions. This ensures
+that all visual variants, interactive states, and edge cases are documented and testable.
+
+Use CSF3 format (Component Story Format 3) with `Meta` + `StoryObj` typing for all stories.
+
+**Story file naming convention:** `{ComponentName}.stories.tsx`
+
+**Dimension 1 — Variant Axis (CRITICAL):**
+Every visual variant of a component gets its own named story export, PLUS an AllVariants
+grid story showing all variants side-by-side for comparison.
+
+```tsx
+// Example: Button.stories.tsx
+export const Primary: Story = { args: { variant: 'primary', children: 'Primary' } }
+export const Secondary: Story = { args: { variant: 'secondary', children: 'Secondary' } }
+export const Ghost: Story = { args: { variant: 'ghost', children: 'Ghost' } }
+export const Danger: Story = { args: { variant: 'danger', children: 'Danger' } }
+
+// Grid story: all variants in one view
+export const AllVariants: Story = {
+  render: () => (
+    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+      {['primary', 'secondary', 'ghost', 'danger'].map(v => (
+        <Button key={v} variant={v}>{v}</Button>
+      ))}
+    </div>
+  ),
+}
+```
+
+**Dimension 2 — Size Axis (CRITICAL):**
+Every size option gets a dedicated story, PLUS an AllSizes comparison story.
+
+```tsx
+export const Small: Story = { args: { size: 'sm', children: 'Small' } }
+export const Medium: Story = { args: { size: 'md', children: 'Medium' } }
+export const Large: Story = { args: { size: 'lg', children: 'Large' } }
+
+export const AllSizes: Story = {
+  render: () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      {['sm', 'md', 'lg'].map(s => (
+        <Button key={s} size={s}>{s}</Button>
+      ))}
+    </div>
+  ),
+}
+```
+
+**Dimension 3 — State Axis (CRITICAL):**
+Interactive states: disabled, loading, error. Use `play` functions for hover/focus/active.
+
+```tsx
+export const Disabled: Story = { args: { disabled: true, children: 'Disabled' } }
+export const Loading: Story = { args: { loading: true, children: 'Loading...' } }
+
+// Play function for interaction testing
+export const FocusState: Story = {
+  play: async ({ canvasElement }) => {
+    const button = canvasElement.querySelector('button')
+    button?.focus()
+  },
+}
+```
+
+**Dimension 4 — Theme Axis:**
+Theme decorator already applied globally (Step 3 above). Add a dedicated side-by-side
+comparison story per component:
+
+```tsx
+export const ThemeComparison: Story = {
+  render: () => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+      <div data-theme="light" style={{ padding: '1rem', background: 'var(--surface-primary)' }}>
+        <Button variant="primary">Light Mode</Button>
+      </div>
+      <div data-theme="dark" style={{ padding: '1rem', background: 'var(--surface-primary)' }}>
+        <Button variant="primary">Dark Mode</Button>
+      </div>
+    </div>
+  ),
+}
+```
+
+**Dimension 5 — Color Axis:**
+For components with a `color` prop, create a color palette grid:
+
+```tsx
+export const AllColors: Story = {
+  render: () => (
+    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      {['primary', 'success', 'warning', 'danger', 'info'].map(c => (
+        <Badge key={c} color={c}>{c}</Badge>
+      ))}
+    </div>
+  ),
+}
+```
+
+**Dimension 6 — Composition Axis (CRITICAL):**
+Compound components (Select, Dialog, Tabs, Menu, Form) need stories showing the
+full part assembly:
+
+```tsx
+// Example: Dialog composition story
+export const FullComposition: Story = {
+  render: () => (
+    <Dialog>
+      <DialogTrigger asChild><Button>Open Dialog</Button></DialogTrigger>
+      <DialogContent>
+        <DialogTitle>Title</DialogTitle>
+        <DialogDescription>Description text</DialogDescription>
+        <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
+      </DialogContent>
+    </Dialog>
+  ),
+}
+
+// Minimal composition
+export const BasicComposition: Story = {
+  render: () => (
+    <Dialog>
+      <DialogTrigger>Open</DialogTrigger>
+      <DialogContent><DialogTitle>Title</DialogTitle></DialogContent>
+    </Dialog>
+  ),
+}
+
+// Real-world usage pattern
+export const ConfirmationDialog: Story = {
+  render: () => (
+    <Dialog>
+      <DialogTrigger asChild><Button variant="danger">Delete</Button></DialogTrigger>
+      <DialogContent>
+        <DialogTitle>Are you sure?</DialogTitle>
+        <DialogDescription>This action cannot be undone.</DialogDescription>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+          <Button variant="danger">Delete</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  ),
+}
+```
+
+**Dimension 7 — Slot / Children Axis:**
+Show all possible children patterns:
+
+```tsx
+export const TextOnly: Story = { args: { children: 'Button' } }
+export const WithLeadingIcon: Story = { args: { children: <><IconPlus /> Add Item</> } }
+export const WithTrailingIcon: Story = { args: { children: <>Next <IconArrowRight /></> } }
+export const IconOnly: Story = { args: { children: <IconSearch />, 'aria-label': 'Search' } }
+export const WithBadge: Story = { args: { children: <>Inbox <Badge>3</Badge></> } }
+```
+
+**Dimension 8 — Polymorphic `as` / `asChild` Axis:**
+If a component supports rendering as different elements:
+
+```tsx
+export const AsButton: Story = { args: { children: 'Button (default)' } }
+export const AsLink: Story = {
+  args: { asChild: true, children: <a href="#">As Link</a> },
+}
+export const AsRouterLink: Story = {
+  args: { asChild: true, children: <Link href="/page">Router Link</Link> },
+}
+```
+
+**Dimension 9 — Responsive Axis:**
+Use Storybook viewport parameters:
+
+```tsx
+export const Mobile: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  args: { children: 'Mobile view', fullWidth: true },
+}
+export const Tablet: Story = {
+  parameters: { viewport: { defaultViewport: 'tablet' } },
+}
+```
+
+**Dimension 10 — Accessibility Axis:**
+Keyboard navigation and focus management via play functions:
+
+```tsx
+export const KeyboardNavigation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const trigger = canvas.getByRole('button')
+    await userEvent.tab()  // focus trigger
+    await userEvent.keyboard('{Enter}')  // open
+    await userEvent.keyboard('{Escape}')  // close
+  },
+}
+
+export const FocusTrap: Story = {
+  name: 'Focus Trap (Dialog)',
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button'))
+    // Tab should cycle within dialog, not escape to background
+    await userEvent.tab()
+    await userEvent.tab()
+    await userEvent.tab()
+  },
+}
+```
+
+**Dimension 11 — Edge Case Axis:**
+Boundary conditions and unusual content:
+
+```tsx
+export const LongText: Story = {
+  args: { children: 'This is a very long button label that should handle overflow gracefully' },
+}
+export const EmptyChildren: Story = { args: { children: '' } }
+export const Overflow: Story = {
+  decorators: [(Story) => <div style={{ width: '100px' }}><Story /></div>],
+  args: { children: 'Overflow container test' },
+}
+```
+
+**Coverage verification checklist** — After generating all stories, verify:
+
+```
+[ ] Every component has a .stories.tsx file
+[ ] Every prop with discrete options has individual named stories + AllX grid story
+[ ] Every interactive state has a story (disabled, loading, error if applicable)
+[ ] Compound components have Basic, Full, and RealWorld composition stories
+[ ] Theme comparison story exists for every component
+[ ] Play functions test keyboard navigation for interactive components
+[ ] Edge case stories exist (long text, empty, overflow)
+[ ] Polymorphic as/asChild patterns have dedicated stories (if component supports it)
+[ ] `npm run storybook` starts without errors
+[ ] All stories render correctly in both light and dark themes
+```
+
+**Story count expectation by component type:**
+
+| Component Type | Minimum Stories | Example |
+|---------------|----------------|---------|
+| Simple (Button, Badge) | 15-25 | Variants + Sizes + States + Slots + Theme + Edge |
+| Form (Input, Select) | 10-20 | States + Validation + Composition + Accessibility |
+| Compound (Dialog, Tabs) | 8-15 | Basic + Full + RealWorld + Keyboard + FocusTrap |
+| Layout (Stack, Grid) | 5-10 | Directions + Spacing + Responsive + Nested |
+| Typography (Heading, Text) | 5-8 | Levels + Weights + Truncation + As polymorphic |
+
+**Step 3 — Storybook Dark Mode Decorator Configuration:**
+
+The decorator in `.storybook/preview.ts` MUST match the `attribute` used by the app's
+`ThemeProvider`. A mismatch means the Storybook toggle changes state but components
+render with wrong theme styles.
+
+```typescript
+// .storybook/preview.ts
+
+// === Option A: data-attribute based (default for next-themes attribute="data-theme") ===
+import { withThemeByDataAttribute } from '@storybook/addon-themes'
+
+const preview = {
+  decorators: [
+    withThemeByDataAttribute({
+      themes: {
+        light: 'light',
+        dark: 'dark',
+      },
+      defaultTheme: 'light',
+      attributeName: 'data-theme',  // MUST match ThemeProvider's attribute prop
+    }),
+  ],
+}
+
+// === Option B: class based (for next-themes attribute="class" / Tailwind dark:) ===
+import { withThemeByClassName } from '@storybook/addon-themes'
+
+const preview = {
+  decorators: [
+    withThemeByClassName({
+      themes: {
+        light: '',       // no class = light mode
+        dark: 'dark',    // class="dark" for Tailwind dark: variant
+      },
+      defaultTheme: 'light',
+    }),
+  ],
+}
+```
+
+**CRITICAL attribute alignment rule:**
+
+| ThemeProvider `attribute` | Storybook decorator | Storybook `attributeName` |
+|--------------------------|---------------------|--------------------------|
+| `"data-theme"` (default) | `withThemeByDataAttribute` | `"data-theme"` |
+| `"class"` (Tailwind) | `withThemeByClassName` | N/A |
+| `"data-mode"` (custom) | `withThemeByDataAttribute` | `"data-mode"` |
+
+If the app uses `attribute="class"` but Storybook uses `withThemeByDataAttribute`,
+or vice versa, dark mode will appear to work in the app but fail silently in Storybook.
+Always verify both sides use the same mechanism.
 
 ---
 
@@ -1625,7 +2093,7 @@ generic Bootstrap-with-extra-steps?
 - Interactive states (hover/active/focus) feel natural and progressive
 - Danger/warning/success semantics are distinct and intuitive
 
-### 4. Spacing & Rhythm (weight: 15%)
+### 4. Spacing & Rhythm (weight: 10%)
 - Spacing scale values are harmonious (consistent ratio between steps)
 - Internal component spacing feels balanced
 - Spacing between components creates clear groupings
@@ -1642,10 +2110,17 @@ generic Bootstrap-with-extra-steps?
 - Focus ring is keyboard-visible but not mouse-visible (or acceptable for both)
 - Loading states communicate progress
 
-### 7. Dark Mode Quality (weight: 5%)
+### 7. Dark Mode Quality (weight: 10%)
+- INFRASTRUCTURE: suppressHydrationWarning on `<html>`, correct ThemeProvider setup
+- Attribute alignment: ThemeProvider = CSS selectors = Tailwind config = Storybook decorator
+- No FOUC: page loads in correct theme without flash
+- Theme toggle works and persists across page reload
 - Dark theme has its own personality (not just inverted lightness)
-- Contrast is maintained without eye strain
+- Contrast is maintained without eye strain (APCA Lc 60+)
 - Colored elements adapt naturally (not washed out or neon)
+- All semantic tokens defined in both light and dark sets
+- No hardcoded color values in components
+- Theme-dependent UI uses mounted guard pattern
 
 ### 8. Responsive Awareness (weight: 5%)
 - Token values account for viewport variations
@@ -1856,7 +2331,7 @@ Category                        Weight   Items
                                          Semantic colors (danger/success/warning) are distinct
                                          Text meets APCA Lc 60+ on all backgrounds
 
-4. Spacing & Rhythm              15%     Component internal spacing is balanced
+4. Spacing & Rhythm              10%     Component internal spacing is balanced
                                          Spacing between elements creates clear groups
                                          Scale is consistent (no arbitrary values)
 
@@ -1871,10 +2346,25 @@ Category                        Weight   Items
                                          (sm Button same height as sm Input)
                                          Icon sizing is proportional
 
-7. Dark Mode Quality              5%     Dark theme has appropriate contrast
+7. Dark Mode Quality             10%     INFRASTRUCTURE:
+                                         <html> has suppressHydrationWarning (Next.js)
+                                         ThemeProvider is "use client" with correct attribute
+                                         Attribute alignment: ThemeProvider = CSS = Tailwind = Storybook
+                                         No FOUC: page loads in correct theme without flash
+                                         Theme toggle works and persists across page reload
+                                         System preference detection works (prefers-color-scheme)
+                                         VISUAL:
+                                         Dark theme has appropriate contrast (APCA Lc 60+)
                                          Colors don't look washed out or neon
-                                         Shadows/elevation adapt (lighter in dark mode)
-                                         No pure white text on dark backgrounds
+                                         Shadows/elevation adapt (lighter/subtler in dark mode)
+                                         No pure white (#fff) text on dark backgrounds
+                                         All semantic tokens defined in BOTH light and dark sets
+                                         No hardcoded colors in components (all via CSS variables)
+                                         COMPONENT-LEVEL:
+                                         Theme-dependent UI uses mounted guard pattern
+                                         resolvedTheme used (not theme) for runtime checks
+                                         Storybook stories render correctly in both themes
+                                         Focus rings visible in both light and dark mode
 
 8. Responsive Behavior            5%     Components adapt to narrow containers
                                          Text doesn't overflow or clip
