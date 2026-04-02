@@ -1,6 +1,18 @@
 # design-farmer
 
-`design-farmer` is a skill repository centered around `skills/design-farmer/SKILL.md`.
+`design-farmer` is a skill that helps coding agents build and enforce a consistent, production-grade design system.
+
+## Why this exists
+
+When vibe-coding with agent-driven implementation, giving agents a clear system creates much more consistent UI outcomes.
+
+Because of that, this skill is designed for the start of every project:
+
+- If a design system does **not** exist, it guides creation from scratch.
+- If a design system is only **partially** implemented, it identifies gaps and upgrades quality.
+- Even if a design system appears production-ready, it audits consistency (especially accessibility and color usage) and pushes the result toward a higher-quality, unified standard.
+
+In short, this skill turns design quality from "best effort" into a repeatable engineering workflow.
 
 ## Installation
 
@@ -47,9 +59,3 @@ Example tool roots:
 
 - If installer output says `No supported tools detected`, install one supported tool first, then re-run.
 - If a download fails, verify network access and check `curl --version`.
-
-## Repository layout
-
-- `install.sh` — auto-installs the skill across supported tools
-- `skills/design-farmer/SKILL.md` — canonical skill instructions
-- `skills/design-farmer/docs/` — maintenance-focused companion docs for the skill spec
