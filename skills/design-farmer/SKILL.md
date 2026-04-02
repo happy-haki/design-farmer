@@ -35,6 +35,7 @@ To reduce maintenance risk in this large single-file spec, operational guidance 
 - `docs/PHASE-INDEX.md` — concise phase-by-phase responsibilities and handoff map
 - `docs/QUALITY-GATES.md` — verification standards and release readiness criteria
 - `docs/MAINTENANCE.md` — update workflow, anti-drift checks, and contribution checklist
+- `docs/INSTALLATION.md` — English installation guide and installer usage
 
 `SKILL.md` remains the canonical runtime instruction file. Companion docs are maintainability aids and must stay aligned.
 
