@@ -60,6 +60,71 @@ Every phase concludes with one of:
 
 ---
 
+## Fallback & Degradation Protocol
+
+Every phase that delegates to an Agent or uses an external tool MUST define a fallback path. The pipeline NEVER silently fails.
+
+### Degradation Pattern
+
+```
+Try primary path:
+  If success → continue to next phase
+  If failure (timeout, token limit, tool unavailable):
+    Log: "[DEGRADATION] Phase {N}: {primary} failed ({reason}). Using {fallback}."
+    Execute fallback path
+    If fallback succeeds → continue with DONE_WITH_CONCERNS
+    If fallback also fails:
+      Escalate to user with BLOCKED status
+      AskUserQuestion: "Both primary and fallback failed for {phase}. Error: {error}. How to proceed?"
+```
+
+### Fallback Registry
+
+| Phase | Primary Path | Fallback Path |
+|-------|-------------|---------------|
+| Phase 2 (Analysis) | Structured repository analysis pass (specialized delegation preferred) | Direct Grep/Glob scanning with reduced depth |
+| Phase 3 (Extraction) | Specialized analysis pass | Manual OKLCH extraction via inline math |
+| Phase 4.5 (DESIGN.md) | Structured design-document drafting | Write DESIGN.md directly with Write tool |
+| Phase 5 (Tokens) | Specialized implementation pass | Implement tokens directly with Edit/Write |
+| Phase 6 (Components) | Specialized implementation pass | Implement components directly with Edit/Write, one at a time |
+| Phase 7 (Storybook) | `storybook init` via the detected package manager | Manual .storybook config + story file generation |
+| Phase 8 (Review) | 5 specialized reviewer passes (parallel when supported) | Sequential review with combined criteria |
+| Phase 8.5 (Visual QA) | Headless browser screenshots | Manual verification prompt with user-provided screenshots |
+| Phase 9 (Docs) | Structured documentation drafting | Write docs directly with Write tool |
+| Phase 10 (Integration) | Structured application changes | Guided step-by-step instructions for manual execution |
+
+### Tool Availability Checks
+
+Before using any external tool, verify availability without triggering installs or network
+access as part of the check itself:
+
+```bash
+# Storybook init helper via detected package manager
+if command -v npx >/dev/null 2>&1 || command -v yarn >/dev/null 2>&1 || command -v pnpm >/dev/null 2>&1 || command -v bun >/dev/null 2>&1; then
+  echo "storybook init helper available"
+else
+  echo "no package-manager storybook init helper available"
+fi
+
+# Headless browser tooling already declared in the project
+if find . -path '*/node_modules' -prune -o -name 'playwright.config.*' -print -quit | grep -q . || grep -R -l '"@playwright/test"\|"playwright"' . --include 'package.json' --exclude-dir node_modules >/dev/null 2>&1; then
+  echo "project browser tooling available"
+else
+  echo "no project-declared browser tooling"
+fi
+```
+
+### Logging Requirement
+
+Every degradation MUST be logged:
+```
+[DEGRADATION] Phase {N}: {primary_path} failed ({reason}). Using {fallback_path}.
+```
+
+Degradation logs are included in Phase 9.3 Completion Report under a **Pipeline Degradations** section.
+
+---
+
 ## Phase 0: Pre-flight
 
 Run these checks before any other work:
@@ -2547,8 +2612,8 @@ tooling. Do not assume unrelated CLIs, and do not trigger package installation o
 access just to probe availability.
 
 ```bash
-# Prefer browser tooling already declared in the project
-if ls playwright.config.* >/dev/null 2>&1 || grep -q '"@playwright/test"\|"playwright"' package.json 2>/dev/null; then
+# Prefer browser tooling already declared in the project, including nested workspace packages
+if find . -path '*/node_modules' -prune -o -name 'playwright.config.*' -print -quit | grep -q . || grep -R -l '"@playwright/test"\|"playwright"' . --include 'package.json' --exclude-dir node_modules >/dev/null 2>&1; then
   echo "VISUAL_TOOL=playwright"
 else
   echo "VISUAL_TOOL=none"
@@ -2843,6 +2908,10 @@ All must pass with zero errors before declaring completion.
 - Scientist: {data validation summary}
 - Designer: {grade}
 - Design Engineer: {APPROVED/APPROVED_WITH_CHANGES}
+
+### Pipeline Degradations
+- List one bullet per degradation in the format: `{Phase}: {primary_path} failed ({reason}) → {fallback_path}`
+- If no degradations occurred, write: `- None`
 
 ### Next Steps
 See Phase 10 (App Integration) to wire the design system into your application.
