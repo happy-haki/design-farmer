@@ -15,3 +15,24 @@ jobs:
 
       - name: Run skill structure validation
         run: bash scripts/validate-skill-md.sh
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [bash, zsh]
+        tool: [claude, codex, amp, gemini, opencode]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure zsh is available
+        run: |
+          if ! command -v zsh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y zsh
+          fi
+
+      - name: Run installer smoke tests
+        run: ${{ matrix.shell }} -lc "bash scripts/test-install-smoke.sh ${{ matrix.tool }}"
