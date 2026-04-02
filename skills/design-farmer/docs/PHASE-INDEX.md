@@ -9,27 +9,27 @@ This index provides a compact map of `SKILL.md` execution flow for maintainers.
 
 ## Phase Map
 
-1. **Phase 0 — Pre-flight**
+1. **Phase 0: Pre-flight**
    - Detect project topology, frameworks, package manager, existing design system artifacts.
-2. **Phase 1 — Discovery Interview**
+2. **Phase 1: Discovery Interview**
    - Ask one question at a time, block on user response, build `DesignFarmerConfig`.
-3. **Phase 2 — Repository Analysis**
+3. **Phase 2: Repository Analysis**
    - Assess design maturity, inventory components, identify style/token patterns.
-4. **Phase 3 — Pattern Extraction & OKLCH Conversion**
+4. **Phase 3: Design Pattern Extraction & OKLCH Conversion**
    - Convert and normalize color systems, generate scales, validate contrast.
-5. **Phase 4 — Architecture Design**
+5. **Phase 4: Architecture Design**
    - Define token hierarchy, theme architecture, directory and build strategy.
-6. **Phase 5 — Token Implementation**
+6. **Phase 5: Token Implementation**
    - Implement primitive + semantic tokens and utilities with tests.
-7. **Phase 6 — Component Implementation**
+7. **Phase 6: Component Implementation**
    - Build component library using selected path (headless/custom) with accessibility requirements.
-8. **Phase 7 — Storybook Integration**
+8. **Phase 7: Storybook Integration**
    - Document components and states visually (optional for light mode-only scenarios as configured).
-9. **Phase 8 — Multi-Reviewer Verification**
+9. **Phase 8: Multi-Reviewer Verification**
    - Execute multi-angle quality review and aggregate risk.
-10. **Phase 8.5 — Live Design Review**
+10. **Phase 8.5: Design Review (Live Visual QA)**
     - Perform visual QA loop with strict triage and risk thresholds.
-11. **Phase 9 — Documentation & Completion**
+11. **Phase 9: Documentation & Completion**
     - Generate docs, run final verification commands, emit completion report.
 
 ## Cross-Phase Contracts
