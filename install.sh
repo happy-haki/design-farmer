@@ -8,6 +8,7 @@ SKILL_NAME="design-farmer"
 SKILL_ROOT="skills/design-farmer"
 BUNDLE_FILES=(
   "$SKILL_ROOT/SKILL.md"
+  "$SKILL_ROOT/bin/version-check"
   "$SKILL_ROOT/docs/PHASE-INDEX.md"
   "$SKILL_ROOT/docs/QUALITY-GATES.md"
   "$SKILL_ROOT/docs/MAINTENANCE.md"
@@ -73,6 +74,10 @@ install_bundle_atomic() {
       return 1
     fi
   done
+
+  if [ -d "$staging_dir/bin" ]; then
+    find "$staging_dir/bin" -type f -exec chmod +x {} +
+  fi
 
   if [ -d "$target_dir" ]; then
     backup_dir="$(mktemp -d "${target_parent}/.design-farmer-backup.XXXXXX")"
