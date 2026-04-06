@@ -15,9 +15,31 @@ Via AskUserQuestion, ask:
 > - B) Yes, minimal — Install Storybook with basic stories only
 > - C) No, skip Storybook — Rely on tests and code documentation only
 
-**STOP. Do NOT proceed until user responds.**
+**→ STOP — wait for user response before continuing.**
 
 If user chose A or B:
+
+**Step 0 — (Monorepo only) Determine Storybook location:**
+
+If a monorepo was detected in Phase 0 (pnpm-workspace.yaml / turbo.json / nx.json / lerna.json present),
+ask the user via AskUserQuestion:
+
+> Your project is a monorepo. Where should Storybook live?
+>
+> RECOMMENDATION: Choose A — co-locating Storybook with the design system keeps stories next to source,
+> simplifies imports, and avoids cross-package path configuration.
+>
+> Options:
+> - A) Inside the design system package — `{systemPath}/.storybook/` (co-located, recommended)
+> - B) Dedicated storybook app — `apps/storybook/` or `packages/storybook/` (isolated, good for multi-package docs)
+> - C) Custom path — specify where you want it
+>
+> **→ STOP — wait for user response before continuing.**
+
+Store the resolved path as `{storybookRoot}` for all subsequent steps.
+If the project is NOT a monorepo, set `{storybookRoot}` to `{systemPath}` and skip this question.
+
+---
 
 **Step 1 — Look up the latest stable Storybook version before installing:**
 
@@ -37,22 +59,39 @@ installed Storybook major version. Always verify compatibility before installing
 **Step 2 — Delegate installation:**
 
 ```
-Install and configure Storybook for the design system at {systemPath}:
+Install and configure Storybook at {storybookRoot}:
 
 IMPORTANT: First run `npm view storybook version` to determine the latest stable version.
 Use that version throughout — do NOT assume any specific major version number.
 
-1. Install: use the detected package manager's equivalent of `storybook@latest init`
-   - npm: `npx storybook@latest init`
-   - yarn: `yarn dlx storybook@latest init`
-   - pnpm: `pnpm dlx storybook@latest init`
-   - bun: `bunx storybook@latest init`
-   - Verify the installed version after init with the matching package-manager command
+1. Install: run `storybook@latest init` from {storybookRoot} using the detected package manager
+   - npm: `cd {storybookRoot} && npx storybook@latest init`
+   - yarn: `cd {storybookRoot} && yarn dlx storybook@latest init`
+   - pnpm: `cd {storybookRoot} && pnpm dlx storybook@latest init`
+   - bun: `cd {storybookRoot} && bunx storybook@latest init`
+   - For monorepo Option B (dedicated app at e.g. `apps/storybook`):
+     a. Create `apps/storybook/package.json` with the design system as a workspace dependency:
+        `{ "name": "@{scope}/storybook", "version": "0.0.1", "private": true,
+           "dependencies": { "@{scope}/design-system": "workspace:*" } }`
+     b. Register the package in `pnpm-workspace.yaml` (if not already covered by glob, add `- 'apps/*'`)
+     c. If turbo.json exists, add `storybook` and `build-storybook` tasks to the pipeline
+     d. Run init from inside the new package: `cd apps/storybook && {packageManager} dlx storybook@latest init`
+     e. In `apps/storybook/.storybook/main.ts`, set the `stories` glob to reach the design system:
+        `stories: ['../../packages/design-system/src/**/*.stories.@(ts|tsx)']`
+     f. Import the design system's tokens/CSS from the workspace package in `preview.tsx`:
+        `import '@{scope}/design-system/src/tokens/index.css'`
+   - IMPORTANT: After init, add `@storybook/react` to the design system package's devDependencies:
+     `{packageManager} --filter {systemPackageName} add -D @storybook/react@latest`
+     This installs the @storybook/react type definitions inside the design system package so
+     the IDE recognizes `Meta`, `StoryObj`, etc. in `.stories.tsx` files without the TypeScript
+     TS17004/TS6142 errors that appear when stories are excluded from the main tsconfig.
+   - After init, verify the installed version: `npx storybook --version` (or the equivalent for your package manager)
+   - Confirm the installed major version matches the addon versions fetched in Step 1
 2. Configure addons (ensure versions match the installed Storybook major version):
    - @storybook/addon-a11y (accessibility checking)
    - @storybook/addon-themes (dark mode toggle)
    - @storybook/addon-docs (auto documentation)
-3. Configure .storybook/preview.ts:
+3. Configure {storybookRoot}/.storybook/preview.tsx:
    - Import the design system's global CSS (tokens, reset, theme files)
    - Set up theme decorator for dark mode toggle (see 'Storybook Dark Mode Decorator' below)
    - Configure viewport presets (mobile: 375px, tablet: 768px, desktop: 1280px)
@@ -60,6 +99,82 @@ Use that version throughout — do NOT assume any specific major version number.
 4. Create stories for every implemented component following the Polymorphic Coverage
    Matrix defined in Step 3 below.
 ```
+
+**Step 2.5 — Concrete configuration file templates:**
+
+After `storybook@latest init` generates the base config, update the configuration files to match these templates:
+
+**`apps/storybook/.storybook/main.ts`:**
+```typescript
+import type { StorybookConfig } from "@storybook/react-vite";
+
+const config: StorybookConfig = {
+  stories: ["../../packages/{designSystemDir}/src/**/*.stories.@(ts|tsx)"],
+  addons: [
+    "@storybook/addon-docs",
+    "@storybook/addon-a11y",
+    "@storybook/addon-themes",
+  ],
+  framework: {
+    name: "@storybook/react-vite",
+    options: {},
+  },
+};
+
+export default config;
+```
+
+Note: Use `@storybook/react-vite` framework for Vite-based projects (most monorepos). Use `@storybook/react-webpack5` only if the project uses webpack.
+
+**`apps/storybook/.storybook/preview.tsx`:**
+```typescript
+import type { Preview } from "@storybook/react";
+import "../../packages/{designSystemDir}/src/styles/index.css";
+
+const preview: Preview = {
+  parameters: {
+    layout: "centered",
+    docs: {
+      toc: true,
+    },
+  },
+  tags: ["autodocs"],
+};
+
+export default preview;
+```
+
+**`apps/storybook/package.json`:**
+```json
+{
+  "name": "@{scope}/storybook",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "storybook": "storybook dev --port 6006",
+    "build-storybook": "storybook build"
+  },
+  "dependencies": {
+    "@{scope}/{designSystemPackage}": "workspace:*"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "latest",
+    "@storybook/addon-docs": "latest",
+    "@storybook/addon-themes": "latest",
+    "@storybook/react-vite": "latest",
+    "storybook": "latest"
+  }
+}
+```
+
+**Critical rules for story files:**
+1. Always use the EXACT prop values defined in the component's TypeScript interface
+   - ✅ `size="small"` if the component defines `"small" | "medium" | "large"`
+   - ❌ `size="sm"` — this will fail TypeScript and show errors in the IDE
+2. Import types from the design system package: `import type { Meta, StoryObj } from "@storybook/react"`
+3. Always define `meta.component` so autodocs generates the props table
+4. Use `render: () => (...)` for complex multi-instance stories
+5. Use `args` for single-instance stories where possible
 
 **Step 3 — Polymorphic Coverage Story Generation:**
 
@@ -97,14 +212,14 @@ export const AllVariants: Story = {
 Every size option gets a dedicated story, PLUS an AllSizes comparison story.
 
 ```tsx
-export const Small: Story = { args: { size: 'sm', children: 'Small' } }
-export const Medium: Story = { args: { size: 'md', children: 'Medium' } }
-export const Large: Story = { args: { size: 'lg', children: 'Large' } }
+export const Small: Story = { args: { size: 'small', children: 'Small' } }
+export const Medium: Story = { args: { size: 'medium', children: 'Medium' } }
+export const Large: Story = { args: { size: 'large', children: 'Large' } }
 
 export const AllSizes: Story = {
   render: () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-      {['sm', 'md', 'lg'].map(s => (
+      {['small', 'medium', 'large'].map(s => (
         <Button key={s} size={s}>{s}</Button>
       ))}
     </div>
@@ -136,10 +251,10 @@ comparison story per component:
 export const ThemeComparison: Story = {
   render: () => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-      <div data-theme="light" style={{ padding: '1rem', background: 'var(--surface-primary)' }}>
+      <div data-theme="light" style={{ padding: '1rem', background: 'var(--surface-default)' }}>
         <Button variant="primary">Light Mode</Button>
       </div>
-      <div data-theme="dark" style={{ padding: '1rem', background: 'var(--surface-primary)' }}>
+      <div data-theme="dark" style={{ padding: '1rem', background: 'var(--surface-default)' }}>
         <Button variant="primary">Dark Mode</Button>
       </div>
     </div>
@@ -314,12 +429,12 @@ export const Overflow: Story = {
 
 **Step 4 — Storybook Dark Mode Decorator Configuration:**
 
-The decorator in `.storybook/preview.ts` MUST match the `attribute` used by the app's
+The decorator in `{storybookRoot}/.storybook/preview.tsx` MUST match the `attribute` used by the app's
 `ThemeProvider`. A mismatch means the Storybook toggle changes state but components
 render with wrong theme styles.
 
 ```typescript
-// .storybook/preview.ts
+// {storybookRoot}/.storybook/preview.ts
 
 // === Option A: data-attribute based (default for next-themes attribute="data-theme") ===
 import { withThemeByDataAttribute } from '@storybook/addon-themes'
