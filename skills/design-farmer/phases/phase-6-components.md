@@ -2,10 +2,59 @@
 
 Implement components ONE AT A TIME, in dependency order.
 
+## 6.0 Framework Guardrail
+
+Read `framework` from `{systemPath}/.design-farmer/config.json`.
+
+- React (full support): `next-app-router`, `next-pages-router`, `vite-react`, `remix`
+- Non-React (token output only): `astro`, `sveltekit`, `nuxt` — component patterns in this phase (forwardRef, JSX, headless libraries) are React-specific.
+
+```
+If framework is in [next-app-router, next-pages-router, vite-react, remix]:
+  → Proceed to 6.0.1 (full component implementation)
+
+If framework is in [astro, sveltekit, nuxt] AND componentScope = 'foundation':
+  → SKIP component implementation (tokens only — already done in Phase 5)
+  → Emit DONE: "Token-only implementation complete for {framework}. Phase 6 skipped: component
+    patterns require React. Use the generated CSS tokens directly in your {framework} components."
+  → Jump to Phase 8 (skip Phase 7 — Storybook is React-oriented and has no components to document)
+
+If framework is in [astro, sveltekit, nuxt] AND componentScope ≠ 'foundation':
+  → NEEDS_CONTEXT: ask via AskUserQuestion:
+    "Your project uses {framework}, which doesn't use React component patterns (forwardRef, JSX,
+    headless React libraries). Phase 6 generates React components — these won't compile for {framework}.
+    
+    How should I proceed?
+    - A) Generate React components anyway — I'm using React inside {framework} (e.g. React islands in Astro)
+    - B) Downgrade to foundation-only — skip components, use tokens only
+    - C) Stop here — I'll write {framework}-native components manually using the DESIGN.md as reference"
+  
+  → Wait for user response. If A: validate headless library compatibility (see below), then proceed to 6.0.1. If B: emit DONE_WITH_CONCERNS and jump to Phase 8 (no components to document in Storybook). If C: emit DONE_WITH_CONCERNS and jump to Phase 8.
+
+  **If user chose A (generate React components for a non-React framework):**
+  The headless library selected in Phase 1 Q3-1 may be framework-specific (e.g., Melt UI for Svelte,
+  Radix Vue for Vue). These libraries are NOT compatible with React component generation.
+  
+  Check `headlessLibrary` from config.json. If it maps to a non-React package:
+  - `melt` → @melt-ui/svelte (Svelte-only)
+  - `bits` → bits-ui (Svelte-only)
+  - `headless-ui` with Vue framework → @headlessui/vue (Vue-only)
+  
+  Ask via AskUserQuestion:
+  > Your headless library (`{headlessLibrary}`) is {framework}-specific and won't work with React components.
+  > Choose a React-compatible replacement:
+  > - A) Radix UI — Rich primitives, widely adopted
+  > - B) Base UI — Maximum flexibility, by MUI
+  > - C) Ark UI — Framework-agnostic
+  > - D) No library — Build from scratch
+  
+  Update `headlessLibrary` in config.json with the user's choice before proceeding to 6.0.1.
+```
+
 The implementation path depends on **Design Maturity** (from Phase 2) and **Headless Library**
 choice (from Question 3-1):
 
-## 6.0 Path Selection
+## 6.0.1 Path Selection
 
 ```
 If Design Maturity = GREENFIELD (score 0-2):
@@ -27,7 +76,7 @@ If Design Maturity = MATURE (score 6+):
   -> Do NOT break existing consumer code without explicit user approval
 ```
 
-## 6.0.1 Dependency Pre-install
+## 6.0.2 Dependency Pre-install
 
 Before implementing any component, install required dependencies and verify versions:
 
@@ -66,13 +115,13 @@ if [ "{headlessLibrary}" != "none" ] && [ "{headlessLibrary}" != "" ]; then
   # Resolve package name from headlessLibrary choice:
   # base-ui    → @base-ui-components/react
   # ark        → @ark-ui/react
-  # headlessui → @headlessui/react
+  # headless-ui → @headlessui/react
   # melt       → @melt-ui/svelte
   # bits       → bits-ui
   # radix      → per-component packages (see mapping above)
   #
   # For single-package libraries:
-  HEADLESS_PKG=$(node -e "const m={'base-ui':'@base-ui-components/react','ark':'@ark-ui/react','headlessui':'@headlessui/react','bits':'bits-ui'};console.log(m['{headlessLibrary}']||'')" 2>/dev/null)
+  HEADLESS_PKG=$(node -e "const m={'base-ui':'@base-ui-components/react','ark':'@ark-ui/react','headless-ui':'@headlessui/react','bits':'bits-ui'};console.log(m['{headlessLibrary}']||'')" 2>/dev/null)
   [ -n "$HEADLESS_PKG" ] && npm view "$HEADLESS_PKG" version 2>/dev/null && {packageManager} add "$HEADLESS_PKG"
   # For Radix UI: install per-component packages matching componentScope (already handled above)
   # Verify: list installed packages
@@ -84,7 +133,7 @@ Do NOT hardcode a specific version number — always install the latest from npm
 
 ---
 
-## 6.0.2 React Import Rules
+## 6.0.3 React Import Rules
 
 **CRITICAL:** Always use named imports from React. Never use the React namespace.
 
@@ -134,11 +183,9 @@ export const Dialog = {
 Button.defaultProps = { variant: "primary" };  // use default parameters instead
 ```
 
-**Why:** React 19 encourages named imports. Namespace imports (`import * as React`) add unnecessary bundle overhead and make tree-shaking harder. `React.FC` explicitly removes the `children` prop type in React 18+, causing type errors. Named imports make dependencies explicit and improve IDE autocompletion.
-
 ---
 
-## 6.0.3 Border vs Box-Shadow Approach
+## 6.0.4 Border vs Box-Shadow Approach
 
 For interactive elements (Input, Select trigger, Textarea, etc.), use **box-shadow** for borders instead of CSS `border`:
 
@@ -164,10 +211,7 @@ For interactive elements (Input, Select trigger, Textarea, etc.), use **box-shad
 }
 ```
 
-**Why box-shadow:**
-- No layout shift when switching between default/focus/error states (box-shadow has zero width impact)
-- Can combine multiple box-shadows: `0 0 0 1px var(--border-default), var(--shadow-sm)` adds both a border and a drop shadow in one property
-- Smooth CSS transitions via `transition: box-shadow` are cleaner than `transition: border-color`
+**Why box-shadow:** No layout shift (zero width impact), composable with drop shadows in one property, and `transition: box-shadow` is cleaner than `transition: border-color`.
 
 **Define these tokens in `src/styles/tokens.css`:**
 
@@ -367,7 +411,14 @@ For each component:
    # expect(results).toHaveNoViolations()
    ```
 
-6. **Verify and proceed** — Run tests, check for zero errors, then move to next component.
+6. **Fix Loop Checkpoint** — Run the **Fix Loop Protocol** (see `operational-notes.md`) after each component:
+
+   ```
+   Checks: typecheck, lint, test
+   Max attempts: 5
+   ```
+
+   Do NOT move to the next component until the loop passes. After ALL components in scope are implemented, run one final full-suite Fix Loop before proceeding to Phase 7.
 
 ## 6.3 Component Priority Order
 
@@ -402,3 +453,5 @@ Composed (depends on all above):
 ```
 
 Only implement components within the user's chosen scope from Phase 1 Question 3.
+
+**Status: DONE** — All components in scope implemented, tested, and accessible. Proceed to Phase 7: Storybook Integration.

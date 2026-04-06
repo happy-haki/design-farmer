@@ -1,5 +1,39 @@
 # Phase 5: Token Implementation
 
+## 5.0 Platform Branch
+
+Read `targetPlatforms` from `{systemPath}/.design-farmer/config.json` before proceeding.
+
+```
+If targetPlatforms = 'web' (or field is absent):
+  → Continue to 5.1 (standard web CSS token implementation)
+
+If targetPlatforms = 'web-native' or 'multi-platform':
+  → Use Style Dictionary 4.x multi-platform output (see Phase 4 §4.3 Token Build Pipeline)
+  → Token formats to generate:
+      css:          CSS custom properties (for the web layer)
+      ios-swift:    Swift enum or struct (for iOS UIKit/SwiftUI)
+      android:      XML resources (for Jetpack Compose use compose/object format)
+      js:           JS/TS constants (for React Native / Expo)
+  → OKLCH color values MUST be converted to sRGB (hex) before writing iOS/Android/RN outputs:
+      CSS layer:       oklch(0.55 0.22 264)   → keep as-is (CSS supports OKLCH)
+      iOS/Android/RN:  oklch(0.55 0.22 264)   → convert to #4f46e5 (sRGB hex)
+      Use: https://oklch.com or a build-time conversion (oklch npm package)
+  → After generating multi-platform tokens, continue to 5.3–5.7 for the web layer only
+
+If targetPlatforms = 'web-hybrid' (e.g. Capacitor, Tauri):
+  → Treat as 'web' — HTML/CSS renders in WebView, OKLCH is fully supported
+  → No conversion needed; continue to 5.1
+```
+
+```typescript
+// OKLCH → sRGB (native targets): npm add oklch
+import { formatHex } from 'oklch';
+// formatHex({ l: 0.55, c: 0.22, h: 264 }) → '#4f46e5'
+```
+
+---
+
 Implement tokens in this order. Use the following implementation brief by default when specialized delegation is available; otherwise execute the same work directly:
 
 ## 5.1 OKLCH Utility Functions
@@ -151,7 +185,21 @@ Optional implementation brief:
 ```
 Implement the token system at {systemPath}/src/tokens/ following the architecture
 defined in Phase 4. Use OKLCH values throughout. Generate light.css and dark.css
-theme files. Include TypeScript type exports for all tokens.
-Config: {serialized DesignFarmerConfig}
-Extracted patterns: {serialized extraction results}
+theme files (skip dark.css if themeStrategy = 'light-only'). Include TypeScript type exports for all tokens.
+Read DesignFarmerConfig from {systemPath}/.design-farmer/config.json
+Read design direction from {systemPath}/DESIGN.md (the persistent source of truth)
+Read extracted patterns from Phase 3 output — or from DESIGN.md if Phase 3 was skipped (re-entry path)
 ```
+
+## 5.8 Fix Loop Checkpoint
+
+After all token files, utilities, and tests are written, run the **Fix Loop Protocol** (see `operational-notes.md`):
+
+```
+Checks: typecheck, test
+Max attempts: 5
+```
+
+Do NOT proceed to Phase 6 until typecheck and tests pass. If the loop exhausts all attempts, emit BLOCKED and ask the user.
+
+**Status: DONE** (Fix Loop: passed on attempt {N}/5) — Token system implemented with primitive, semantic, and component tokens. Tests passing. Proceed to Phase 6: Component Implementation.

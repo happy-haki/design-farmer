@@ -31,6 +31,13 @@ Create documentation at `{systemPath}/docs/` or inline in source:
 {packageManager} run build-storybook
 ```
 
+Run the **Fix Loop Protocol** (see `operational-notes.md`) with the full check suite:
+
+```
+Checks: typecheck, lint, build, test
+Max attempts: 5
+```
+
 All must pass with zero errors before declaring completion.
 
 ## 9.3 Completion Report
@@ -66,3 +73,5 @@ All must pass with zero errors before declaring completion.
 ### Next Steps
 See Phase 10 (App Integration) to wire the design system into your application.
 ```
+
+**Status: DONE** — Documentation generated and final verification passed. Design system is production-ready. Proceed to Phase 10: App Integration (optional).

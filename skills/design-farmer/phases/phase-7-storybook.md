@@ -70,18 +70,19 @@ Use that version throughout — do NOT assume any specific major version number.
    - pnpm: `cd {storybookRoot} && pnpm dlx storybook@latest init`
    - bun: `cd {storybookRoot} && bunx storybook@latest init`
    - For monorepo Option B (dedicated app at e.g. `apps/storybook`):
-     a. Create `apps/storybook/package.json` with the design system as a workspace dependency:
+     a. Create `apps/storybook/package.json` with the design system as a workspace dependency
+        (`{scope}` is the npm scope from `designSystemPackage`, e.g. `@acme` from `@acme/design-system`):
         `{ "name": "@{scope}/storybook", "version": "0.0.1", "private": true,
-           "dependencies": { "@{scope}/design-system": "workspace:*" } }`
+           "dependencies": { "{designSystemPackage}": "workspace:*" } }`
      b. Register the package in `pnpm-workspace.yaml` (if not already covered by glob, add `- 'apps/*'`)
      c. If turbo.json exists, add `storybook` and `build-storybook` tasks to the pipeline
      d. Run init from inside the new package: `cd apps/storybook && {packageManager} dlx storybook@latest init`
      e. In `apps/storybook/.storybook/main.ts`, set the `stories` glob to reach the design system:
-        `stories: ['../../packages/design-system/src/**/*.stories.@(ts|tsx)']`
+        `stories: ['../../packages/{designSystemDir}/src/**/*.stories.@(ts|tsx)']`
      f. Import the design system's tokens/CSS from the workspace package in `preview.tsx`:
-        `import '@{scope}/design-system/src/tokens/index.css'`
+        `import '{designSystemPackage}/src/tokens/index.css'`
    - IMPORTANT: After init, add `@storybook/react` to the design system package's devDependencies:
-     `{packageManager} --filter {systemPackageName} add -D @storybook/react@latest`
+     `{packageManager} --filter {designSystemPackage} add -D @storybook/react@latest`
      This installs the @storybook/react type definitions inside the design system package so
      the IDE recognizes `Meta`, `StoryObj`, etc. in `.stories.tsx` files without the TypeScript
      TS17004/TS6142 errors that appear when stories are excluded from the main tsconfig.
@@ -155,7 +156,7 @@ export default preview;
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@{scope}/{designSystemPackage}": "workspace:*"
+    "{designSystemPackage}": "workspace:*"
   },
   "devDependencies": {
     "@storybook/addon-a11y": "latest",
@@ -479,3 +480,22 @@ const preview = {
 If the app uses `attribute="class"` but Storybook uses `withThemeByDataAttribute`,
 or vice versa, dark mode will appear to work in the app but fail silently in Storybook.
 Always verify both sides use the same mechanism.
+
+## Fix Loop Checkpoint
+
+After Storybook installation, configuration, and story generation, run the **Fix Loop Protocol** (see `operational-notes.md`):
+
+```
+Checks: typecheck, build (storybook build)
+Max attempts: 5
+```
+
+Common Storybook errors:
+
+| Error Pattern | Root Cause | Fix |
+|--------------|-----------|-----|
+| `Cannot find module '@storybook/react'` | Missing devDependency in design system package | `{packageManager} --filter {designSystemPackage} add -D @storybook/react@latest` |
+| `TS6142: Module was resolved to .stories.tsx but jsx is not set` | Stories not covered by tsconfig | Add `@storybook/react` types or check tsconfig include paths |
+| `Addon version mismatch` | Storybook core and addon major versions differ | Align all @storybook/* packages to same major |
+
+**Status: DONE** (Fix Loop: passed on attempt {N}/5) — Storybook configured with stories for all components, accessibility addon, and dark mode support. Proceed to Phase 8: Multi-Reviewer Verification.
