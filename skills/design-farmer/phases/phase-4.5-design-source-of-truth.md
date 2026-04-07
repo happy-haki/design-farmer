@@ -56,17 +56,21 @@ Reference exact token values inline with backticks.}
 - **Secondary Text** (`{value}`): Captions, metadata, helper text
 - **Tertiary Text** (`{value}`): Placeholders, disabled labels
 - **Inverse Text** (`{value}`): Text on dark/colored backgrounds
+- **Disabled Text** (`{value}`): Disabled controls, inactive form elements
+- **Brand Text** (`{value}`): Branded accent text for links and emphasis
 
 ### Brand & Interactive
 - **Interactive Primary** (`{value}`): CTAs, links, selected states
 - **Interactive Primary Hover** (`{value}`): Hover state
 - **Interactive Primary Active** (`{value}`): Pressed state
+- **Interactive Bg** (`{value}`): Subtle tinted background for interactive containers
 - **Interactive Text** (`{value}`): Brand-colored text
 
 ### Status
 - **Success** (`{value}`): Positive feedback, confirmed states
 - **Warning** (`{value}`): Caution states
 - **Error** (`{value}`): Destructive actions, validation errors
+- **Error Hover** (`{value}`): Destructive button hover state
 - **Info** (`{value}`): Informational feedback
 
 ### Borders & Dividers
@@ -157,7 +161,7 @@ Reference exact token values inline with backticks.}
 - Focus: `box-shadow: 0 0 0 1px {--border-focus}, {--shadow-sm}`
 - Error: `box-shadow: 0 0 0 1px {--state-error}`
 - Disabled: `opacity: 40%, cursor: not-allowed`
-- Placeholder: `{--text-disabled}`
+- Placeholder: `{--text-tertiary}`
 
 > **Why box-shadow for borders?** Using `box-shadow: 0 0 0 1px` instead of CSS `border` prevents layout shift when switching between default/focus/error states (no width change).
 
@@ -317,7 +321,7 @@ Shape: `border-radius: 9999px` (pill)
 ### Example Component Prompts
 - "Create a card: `--surface-default` bg, `--border-default` outline, `--card-radius`, `CardHeader` with `--surface-subtle` + `--border-subtle` bottom, `CardContent` with `--card-padding`"
 - "Create a primary button: `--interactive-primary` bg, `--text-inverse` text, hover `--interactive-primary-hover`, active `--interactive-primary-active`"
-- "Create an input: box-shadow `--input-shadow`, focus `--input-shadow-focus`, error `--input-shadow-error`, placeholder `--text-disabled`"
+- "Create an input: box-shadow `--input-shadow`, focus `--input-shadow-focus`, error `--input-shadow-error`, placeholder `--text-tertiary`"
 
 ### Iteration Guide
 1. Always reference semantic tokens, never raw color values

@@ -1556,6 +1556,109 @@ fi
 echo ""
 
 # ===========================================================================
+# DIMENSION AF: Phase 11 — Handoff Template Adaptation
+# ===========================================================================
+echo "=== DIMENSION AF: Phase 11 — Handoff Template Adaptation ==="
+
+# Storybook line must be conditional
+if grep -q "If Storybook was installed\|If.*Phase 7 was not skipped" "$PHASES_DIR/phase-11-readiness-handoff.md"; then
+  pass "Phase 11: Storybook section is conditional"
+else
+  fail "Phase 11: Storybook section is unconditional"
+fi
+
+# Theme toggle must be conditional on themeStrategy
+if grep -q "themeStrategy.*light-only\|If themeStrategy" "$PHASES_DIR/phase-11-readiness-handoff.md"; then
+  pass "Phase 11: theme toggle conditional on themeStrategy"
+else
+  fail "Phase 11: theme toggle is unconditional"
+fi
+
+# Keyboard navigation must be conditional on componentScope
+if grep -q "componentScope.*foundation\|If componentScope" "$PHASES_DIR/phase-11-readiness-handoff.md"; then
+  pass "Phase 11: keyboard nav conditional on componentScope"
+else
+  fail "Phase 11: keyboard nav is unconditional"
+fi
+
+# Components count must be conditional on componentScope
+if grep -q "componentScope.*foundation" "$PHASES_DIR/phase-11-readiness-handoff.md"; then
+  pass "Phase 11: component count is conditional"
+else
+  fail "Phase 11: component count is unconditional"
+fi
+
+echo ""
+
+# ===========================================================================
+# DIMENSION AG: Cross-File Token Inventory Consistency
+# ===========================================================================
+echo "=== DIMENSION AG: Cross-File Token Inventory Consistency ==="
+
+# Map Phase 4b CSS token names to their semantic labels in Phase 4.5 / examples
+# Each entry: css_name|semantic_label
+TOKEN_MAP=(
+  "surface-default|Surface Default"
+  "surface-subtle|Surface Subtle"
+  "surface-muted|Surface Muted"
+  "surface-inverse|Surface Inverse"
+  "text-primary|Primary Text"
+  "text-secondary|Secondary Text"
+  "text-tertiary|Tertiary Text"
+  "text-inverse|Inverse Text"
+  "text-disabled|Disabled Text"
+  "text-brand|Brand Text"
+  "interactive-primary|Interactive Primary"
+  "interactive-primary-hover|Interactive Primary Hover"
+  "interactive-primary-active|Interactive Primary Active"
+  "interactive-bg|Interactive Bg"
+  "interactive-text|Interactive Text"
+  "border-default|Border Default"
+  "border-strong|Border Strong"
+  "border-subtle|Border Subtle"
+  "border-focus|Border Focus"
+  "state-success|Success"
+  "state-success-bg|Success Bg"
+  "state-warning|Warning"
+  "state-warning-text|warning-text"
+  "state-warning-bg|Warning Bg"
+  "state-error|Error"
+  "state-error-hover|Error Hover"
+  "state-error-bg|Error Bg"
+  "state-info|Info"
+  "state-info-bg|Info Bg"
+)
+
+for entry in "${TOKEN_MAP[@]}"; do
+  css_name="${entry%%|*}"
+  label="${entry##*|}"
+
+  # Verify token exists in Phase 4b CSS (both light and dark themes)
+  token_count=$(grep -c "\-\-${css_name}:" "$PHASES_DIR/phase-4b-theming.md" || true)
+  if [ "$token_count" -ge 2 ]; then
+    pass "Token inventory: --${css_name} defined in both themes"
+  else
+    fail "Token inventory: --${css_name} missing or not in both themes (found ${token_count})"
+  fi
+
+  # Verify token is documented in Phase 4.5 template (by bold label or CSS name with --)
+  if grep -q "\*\*${label}\*\*\|\-\-${css_name}" "$PHASES_DIR/phase-4.5-design-source-of-truth.md"; then
+    pass "Token inventory: --${css_name} documented in Phase 4.5"
+  else
+    fail "Token inventory: --${css_name} missing from Phase 4.5 template"
+  fi
+
+  # Verify token is referenced in examples/DESIGN.md (by bold label or CSS name with --)
+  if grep -q "\*\*${label}\*\*\|\-\-${css_name}" "$EXAMPLES_DIR/DESIGN.md"; then
+    pass "Token inventory: --${css_name} referenced in examples/DESIGN.md"
+  else
+    fail "Token inventory: --${css_name} missing from examples/DESIGN.md"
+  fi
+done
+
+echo ""
+
+# ===========================================================================
 # SUMMARY
 # ===========================================================================
 echo "==========================================="
@@ -1595,6 +1698,8 @@ echo " AB: Preview Opt-In Gate"
 echo " AC: Early DESIGN.md Draft"
 echo " AD: Cross-File Token Existence (--surface-muted)"
 echo " AE: Badge Status Background Token Consistency"
+echo " AF: Phase 11 Handoff Template Adaptation"
+echo " AG: Cross-File Token Inventory Consistency"
 echo "==========================================="
 
 if [ $FAIL -gt 0 ]; then
