@@ -2,7 +2,7 @@
 
 Generate a `DESIGN.md` file at `{systemPath}/DESIGN.md` so the design artifact always lives beside the generated design-system work it describes.
 
-**Pre-flight validation**: Ensure `completedPhases` exists in config.json (initialize as `[]` if undefined), then verify that `completedPhases` includes both `'phase-4'` AND `'phase-4b'`. If `'phase-4b'` is missing, emit **BLOCKED** — "Phase 4b (Theme & Styling) must complete before Phase 4.5 can generate DESIGN.md. Please re-run Phase 4b first."
+**Pre-flight validation**: Ensure `completedPhases` exists in config.json (initialize as `[]` if undefined), then verify that `completedPhases` includes `'phase-4'`. Also verify `'phase-4b'` is present unless both `themeStrategy = 'light-only'` AND `stylingApproach` is defined and non-empty in config.json (must be one of the valid values: `'tailwind-v4'`, `'tailwind-v3'`, `'css-modules'`, `'styled-components'`, `'vanilla-extract'`, `'panda-css'`, `'vanilla'`) (light-only projects may have legacy configs where 4b was skipped before skip paths were fully documented, but the critical 4b output — `stylingApproach` — must still be present). If `'phase-4b'` is missing and the above exception does not apply, emit **BLOCKED** — "Phase 4b (Theme & Styling) must complete before Phase 4.5 can generate DESIGN.md. Please re-run Phase 4b first."
 
 ## 4.5.1 DESIGN.md Structure
 
@@ -38,6 +38,7 @@ maturityScore: {0-10}
 Reference exact token values inline with backticks.}
 
 **Key Characteristics:**
+{If themeStrategy = 'light-only': omit all "(dark)" values below — only light theme exists}
 - Background base: `{--surface-default value}` (light) / `{--surface-default dark value}` (dark)
 - Primary font: {font family with any OpenType features}
 - Brand accent: `{--interactive-primary value}`
@@ -407,6 +408,6 @@ Calibrate your review against the documented design decisions.
 Flag any implementation that deviates from the documented direction as HIGH severity."
 ```
 
-Before emitting status, ensure `completedPhases` exists in config.json (initialize as `[]` if undefined), then append `'phase-4.5'` to `completedPhases` in `{systemPath}/.design-farmer/config.json`. Also update `config.backup.json`.
+Before emitting status, ensure `completedPhases` exists in config.json (initialize as `[]` if undefined). If `'phase-4.5'` is already present in the array, skip the append (idempotent). Otherwise, append `'phase-4.5'` to `completedPhases` in `{systemPath}/.design-farmer/config.json`. Also update `config.backup.json`.
 
 **Status: DONE** — DESIGN.md generated and saved as the persistent design source of truth. Proceed to Phase 5: Token Implementation.
