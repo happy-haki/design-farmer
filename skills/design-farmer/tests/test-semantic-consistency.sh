@@ -371,9 +371,21 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "=== TEST 9: Phase 0 — Re-Entry Paths ==="
 
-if grep -q "Use it as context" "$PHASES_DIR/phase-0-preflight.md" &&
-   grep -q "Continue to Phase 1" "$PHASES_DIR/phase-0-preflight.md" &&
-   grep -q "Do NOT skip critical decision gates" "$PHASES_DIR/phase-0-preflight.md"; then
+if grep -q '^If user chose \*\*B\*\*:' "$PHASES_DIR/phase-0-preflight.md"; then
+  pass "Re-entry path A: Option B delimiter exists for block boundary parsing"
+else
+  fail "Re-entry path A: missing Option B delimiter for block boundary parsing"
+fi
+
+phase0_option_a_block=$(awk '/^If user chose \*\*A\*\*:/{found=1; next} found && /^If user chose \*\*B\*\*:/{exit} found' "$PHASES_DIR/phase-0-preflight.md")
+
+if [ -z "$phase0_option_a_block" ]; then
+  fail "Re-entry path A: Option A block boundaries are not parseable"
+fi
+
+if grep -qE 'Use it as context|design reference' "$PHASES_DIR/phase-0-preflight.md" &&
+   echo "$phase0_option_a_block" | grep -qE 'Continue to Phase 1' &&
+   echo "$phase0_option_a_block" | grep -qE 'Do NOT skip critical decision gates'; then
   pass "Re-entry path A: context import continues to Phase 1 with required gates"
 else
   fail "Re-entry path A: missing context-import continuation and decision-gate guard"
@@ -402,18 +414,19 @@ else
   fail "Re-entry path B/C: missing continuation to Phase 1"
 fi
 
-if grep -q "reentryMode" "$PHASES_DIR/phase-1-discovery.md" &&
-   grep -q "design-context" "$PHASES_DIR/phase-1-discovery.md"; then
+if grep -qE 'reentryMode' "$PHASES_DIR/phase-1-discovery.md" &&
+   grep -qE 'design-context' "$PHASES_DIR/phase-1-discovery.md" &&
+   grep -qE 'Do NOT auto-accept' "$PHASES_DIR/phase-1-discovery.md"; then
   pass "Re-entry path A: Phase 1 handles reentryMode design-context"
 else
   fail "Re-entry path A: Phase 1 missing reentryMode design-context handling"
 fi
 
-if ! grep -q "Phase 0 → Phase 5 shortcut" "$PHASES_DIR/phase-4.5-design-source-of-truth.md" &&
-   ! grep -q "Phase 0 → Phase 5 shortcut" "$EXAMPLES_DIR/DESIGN.md" &&
-   ! grep -q "before jumping to Phase 5" "$PHASES_DIR/operational-notes.md" &&
-   ! grep -q "Phase 0 → Phase 5 shortcut" "$ROOT_DIR/docs/project-design-farmer.md" &&
-   ! grep -q "parse Config YAML ──→ Phase 5" "$ROOT_DIR/docs/project-design-farmer.md"; then
+if ! grep -qE 'Phase 0[[:space:]]*→[[:space:]]*Phase 5[[:space:]]*shortcut' "$PHASES_DIR/phase-4.5-design-source-of-truth.md" &&
+   ! grep -qE 'Phase 0[[:space:]]*→[[:space:]]*Phase 5[[:space:]]*shortcut' "$EXAMPLES_DIR/DESIGN.md" &&
+   ! grep -qE 'before jumping to Phase[[:space:]]*5' "$PHASES_DIR/operational-notes.md" &&
+   ! grep -qE 'Phase 0[[:space:]]*→[[:space:]]*Phase 5[[:space:]]*shortcut' "$ROOT_DIR/docs/project-design-farmer.md" &&
+   ! grep -qE 'parse Config YAML[[:space:]]+.*Phase[[:space:]]*5' "$ROOT_DIR/docs/project-design-farmer.md"; then
   pass "Re-entry docs/templates align with context-first contract"
 else
   fail "Re-entry docs/templates contain stale Phase 0→5 shortcut wording"

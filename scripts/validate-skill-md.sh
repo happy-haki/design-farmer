@@ -285,35 +285,67 @@ if grep -R -nE 'best-practices\.md|research/best-practices\.md' "$SKILL_DIR" >/d
   exit 1
 fi
 
-echo "Validating stale re-entry shortcut wording..."
-if grep -nF "Phase 0 → Phase 5 shortcut" "$SKILL_DIR/phases/phase-4.5-design-source-of-truth.md" >/dev/null 2>&1; then
-  echo "ERROR: Stale re-entry wording found in phase-4.5-design-source-of-truth.md"
-  echo "  Contract: existing DESIGN.md must be treated as context import (Phase 0 -> Phase 1), not direct Phase 5 shortcut"
+echo "Validating re-entry contract semantics..."
+REENTRY_PHASE0_FILE="$SKILL_DIR/phases/phase-0-preflight.md"
+REENTRY_PHASE1_FILE="$SKILL_DIR/phases/phase-1-discovery.md"
+
+if ! grep -q '^If user chose \*\*B\*\*:' "$REENTRY_PHASE0_FILE"; then
+  echo "ERROR: Missing Option B delimiter for Phase 0 re-entry block parsing"
+  echo "  File: phases/phase-0-preflight.md"
+  echo "  Contract: Option A block boundaries must terminate at explicit Option B heading"
   exit 1
 fi
 
-if grep -nF "Phase 0 → Phase 5 shortcut" "$SKILL_DIR/examples/DESIGN.md" >/dev/null 2>&1; then
-  echo "ERROR: Stale re-entry wording found in examples/DESIGN.md"
-  echo "  Contract: example DESIGN.md must describe context-first re-entry"
+REENTRY_OPTION_A_BLOCK=$(awk '/^If user chose \*\*A\*\*:/{found=1; next} found && /^If user chose \*\*B\*\*:/{exit} found' "$REENTRY_PHASE0_FILE")
+
+if [[ -z "$REENTRY_OPTION_A_BLOCK" ]]; then
+  echo "ERROR: Could not locate Option A re-entry block in Phase 0"
+  echo "  File: phases/phase-0-preflight.md"
+  echo "  Contract: Option A section boundaries must remain explicit and parseable"
   exit 1
 fi
 
-if grep -nF "before jumping to Phase 5" "$SKILL_DIR/phases/operational-notes.md" >/dev/null 2>&1; then
-  echo "ERROR: Stale re-entry operational note found in phases/operational-notes.md"
-  echo "  Contract: Phase 0 re-entry validates config before continuing to Phase 1"
+if ! grep -qE 'Use it as context|design reference' "$REENTRY_PHASE0_FILE" ||
+   ! echo "$REENTRY_OPTION_A_BLOCK" | grep -qE 'Continue to Phase 1' ||
+   ! echo "$REENTRY_OPTION_A_BLOCK" | grep -qE 'Do NOT skip critical decision gates'; then
+  echo "ERROR: Phase 0 missing required context-first re-entry semantics"
+  echo "  File: phases/phase-0-preflight.md"
+  echo "  Contract: Option A must import context, continue to Phase 1, and preserve decision gates"
   exit 1
 fi
 
-if grep -nF "Phase 0 → Phase 5 shortcut" "$ROOT_DIR/docs/project-design-farmer.md" >/dev/null 2>&1; then
-  echo "ERROR: Stale re-entry wording found in docs/project-design-farmer.md"
-  echo "  Contract: repository docs must reflect context-first re-entry semantics"
+if ! grep -qE 'reentryMode' "$REENTRY_PHASE1_FILE" ||
+   ! grep -qE 'design-context' "$REENTRY_PHASE1_FILE" ||
+   ! grep -qE 'Do NOT auto-accept' "$REENTRY_PHASE1_FILE"; then
+  echo "ERROR: Phase 1 missing design-context confirmation semantics"
+  echo "  File: phases/phase-1-discovery.md"
+  echo "  Contract: reentryMode design-context must force explicit confirmation of pre-filled defaults"
   exit 1
 fi
 
-if grep -nF "parse Config YAML ──→ Phase 5" "$ROOT_DIR/docs/project-design-farmer.md" >/dev/null 2>&1; then
-  echo "ERROR: Stale Phase 0->5 data flow found in docs/project-design-farmer.md"
-  echo "  Contract: repository docs must show Phase 0 context import continuing to Phase 1"
-  exit 1
-fi
+forbidden_reentry_patterns=(
+  'Phase 0[[:space:]]*→[[:space:]]*Phase 5[[:space:]]*shortcut'
+  'before jumping to Phase[[:space:]]*5'
+  'parse Config YAML[[:space:]]+.*Phase[[:space:]]*5'
+)
+
+reentry_contract_files=(
+  "$SKILL_DIR/phases/phase-4.5-design-source-of-truth.md"
+  "$SKILL_DIR/examples/DESIGN.md"
+  "$SKILL_DIR/phases/operational-notes.md"
+  "$ROOT_DIR/docs/project-design-farmer.md"
+)
+
+for file in "${reentry_contract_files[@]}"; do
+  for pattern in "${forbidden_reentry_patterns[@]}"; do
+    if grep -nE "$pattern" "$file" >/dev/null 2>&1; then
+      echo "ERROR: Stale re-entry shortcut semantics found"
+      echo "  File: ${file#$ROOT_DIR/}"
+      echo "  Pattern: $pattern"
+      echo "  Contract: re-entry must be context-first (Phase 0 -> Phase 1), not direct-to-Phase-5"
+      exit 1
+    fi
+  done
+done
 
 echo "All skill structure and contract checks passed."
